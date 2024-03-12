@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -24,6 +23,7 @@ import (
 var (
 	configFilePath = fmt.Sprintf("%s/.aws/roles", os.Getenv("HOME"))
 	roleArnRe      = regexp.MustCompile(`^arn:aws:iam::(.+):role/([^/]+)(/.+)?$`)
+	Version        = "v0.0"
 )
 
 func usage() {
@@ -36,7 +36,7 @@ func init() {
 }
 
 func defaultFormat() string {
-	var shell = os.Getenv("SHELL")
+	shell := os.Getenv("SHELL")
 
 	switch runtime.GOOS {
 	case "windows":
@@ -54,10 +54,19 @@ func defaultFormat() string {
 
 func main() {
 	var (
-		duration = flag.Duration("duration", time.Hour, "The duration that the credentials will be valid for.")
-		format   = flag.String("format", defaultFormat(), "Format can be 'bash' or 'powershell'.")
+		duration    = flag.Duration("duration", time.Hour, "The duration that the credentials will be valid for.")
+		format      = flag.String("format", defaultFormat(), "Format can be 'bash' or 'powershell'.")
+		showVersion bool
 	)
+
+	flag.BoolVar(&showVersion, "version", false, "show version and exit")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("%s version %s\n", os.Args[0], Version)
+		os.Exit(0)
+	}
+
 	argv := flag.Args()
 	if len(argv) < 1 {
 		flag.Usage()
@@ -87,8 +96,11 @@ func main() {
 		}
 
 		creds, err = assumeRole(roleConfig.Role, roleConfig.MFA, *duration)
+		must(err)
+
 	} else {
 		creds, err = assumeProfile(role)
+		must(err)
 	}
 
 	must(err)
@@ -202,7 +214,6 @@ func assumeRole(role, mfa string, duration time.Duration) (*credentials.Value, e
 	}
 
 	resp, err := svc.AssumeRole(params)
-
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +246,7 @@ func readTokenCode() (string, error) {
 
 // loadConfig loads the ~/.aws/roles file.
 func loadConfig() (config, error) {
-	raw, err := ioutil.ReadFile(configFilePath)
+	raw, err := os.ReadFile(configFilePath)
 	if err != nil {
 		return nil, err
 	}
